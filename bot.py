@@ -7,7 +7,7 @@ import os
 from datetime import datetime, timedelta
 
 # ============================================================
-#  CONFIG — Remplacez les placeholders par vos vraies valeurs
+#  CONFIG
 # ============================================================
 TOKEN = os.environ.get("TOKEN")
 OWNER_ID = 1467602579482480821
@@ -39,7 +39,7 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ============================================================
-#  GESTION DES DONNÉES (slots.json)
+#  GESTION DES DONNÉES
 # ============================================================
 def load_data():
     if not os.path.exists(DATA_FILE):
@@ -64,8 +64,11 @@ def get_active_slots():
 def slots_remaining():
     return MAX_SLOTS - len(get_active_slots())
 
+def get_main_guild():
+    return bot.guilds[0] if bot.guilds else None
+
 # ============================================================
-#  VIEWS — Panels Discord
+#  VIEWS
 # ============================================================
 
 class PaymentView(discord.ui.View):
@@ -89,7 +92,9 @@ class PaymentView(discord.ui.View):
         )
         embed.set_footer(text="OKV Notifier • Paiement sécurisé")
         await interaction.response.send_message(embed=embed, ephemeral=True)
-        await notify_owner(interaction.guild, self.user, self.hours, "Stripe")
+        guild = get_main_guild()
+        if guild:
+            await notify_owner(guild, self.user, self.hours, "Stripe")
 
     @discord.ui.button(label="🪙 LTC", style=discord.ButtonStyle.grey)
     async def ltc_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -106,13 +111,15 @@ class PaymentView(discord.ui.View):
         )
         embed.set_footer(text="OKV Notifier • Paiement crypto")
         await interaction.response.send_message(embed=embed, ephemeral=True)
-        await notify_owner(interaction.guild, self.user, self.hours, "LTC")
+        guild = get_main_guild()
+        if guild:
+            await notify_owner(guild, self.user, self.hours, "LTC")
 
 
 class ConfirmView(discord.ui.View):
-    def __init__(self, user: discord.Member, hours: int):
+    def __init__(self, user_id: int, hours: int):
         super().__init__(timeout=None)
-        self.user = user
+        self.user_id = user_id
         self.hours = hours
 
     @discord.ui.button(label="✅ Confirmer le paiement", style=discord.ButtonStyle.green)
@@ -120,25 +127,26 @@ class ConfirmView(discord.ui.View):
         if interaction.user.id != OWNER_ID:
             return await interaction.response.send_message("❌ Vous n'êtes pas autorisé.", ephemeral=True)
 
-        guild = interaction.guild
-        member = guild.get_member(self.user.id)
-        if not member:
+        guild = get_main_guild()
+        if not guild:
+            return await interaction.response.send_message("❌ Serveur introuvable.", ephemeral=True)
+
+        try:
+            member = await guild.fetch_member(self.user_id)
+        except:
             return await interaction.response.send_message("❌ Utilisateur introuvable.", ephemeral=True)
 
-        # Vérifier les slots
         if slots_remaining() <= 0:
             return await interaction.response.send_message("❌ Plus de slots disponibles !", ephemeral=True)
 
-        # Attribuer le rôle
         role = guild.get_role(ROLE_ID)
         if role:
             await member.add_roles(role)
 
-        # Enregistrer le slot
         data = load_data()
         expires_at = datetime.utcnow() + timedelta(hours=self.hours)
         slot = {
-            "user_id": self.user.id,
+            "user_id": self.user_id,
             "hours": self.hours,
             "started_at": datetime.utcnow().isoformat(),
             "expires_at": expires_at.isoformat(),
@@ -147,7 +155,6 @@ class ConfirmView(discord.ui.View):
         data["slots"].append(slot)
         save_data(data)
 
-        # Envoyer le script en DM
         try:
             dm_embed = discord.Embed(
                 title="🎉 Accès OKV Notifier activé !",
@@ -160,7 +167,6 @@ class ConfirmView(discord.ui.View):
         except:
             pass
 
-        # Annonce publique
         channel = guild.get_channel(ANNOUNCE_CHANNEL_ID)
         remaining = slots_remaining()
         if channel:
@@ -186,10 +192,11 @@ class ConfirmView(discord.ui.View):
         if interaction.user.id != OWNER_ID:
             return await interaction.response.send_message("❌ Vous n'êtes pas autorisé.", ephemeral=True)
         try:
-            await self.user.send("❌ Votre paiement n'a pas pu être confirmé. Contactez le support.")
+            user = await bot.fetch_user(self.user_id)
+            await user.send("❌ Votre paiement n'a pas pu être confirmé. Contactez le support.")
         except:
             pass
-        await interaction.response.send_message(f"❌ Paiement refusé pour {self.user.mention}.", ephemeral=True)
+        await interaction.response.send_message("❌ Paiement refusé.", ephemeral=True)
         self.stop()
 
 
@@ -197,8 +204,9 @@ class ConfirmView(discord.ui.View):
 #  NOTIFY OWNER
 # ============================================================
 async def notify_owner(guild: discord.Guild, user: discord.Member, hours: int, method: str):
-    owner = guild.get_member(OWNER_ID)
-    if not owner:
+    try:
+        owner = await guild.fetch_member(OWNER_ID)
+    except:
         return
     embed = discord.Embed(
         title="💰 Nouveau paiement en attente !",
@@ -211,7 +219,7 @@ async def notify_owner(guild: discord.Guild, user: discord.Member, hours: int, m
         color=0xFFAA00
     )
     embed.set_footer(text="Confirmez ou refusez ci-dessous")
-    await owner.send(embed=embed, view=ConfirmView(user, hours))
+    await owner.send(embed=embed, view=ConfirmView(user.id, hours))
 
 
 # ============================================================
@@ -249,10 +257,7 @@ async def slots_cmd(interaction: discord.Interaction):
     remaining = slots_remaining()
     active = get_active_slots()
     color = 0x00FF88 if remaining > 0 else 0xFF0000
-    embed = discord.Embed(
-        title="📊 OKV Notifier — Slots",
-        color=color
-    )
+    embed = discord.Embed(title="📊 OKV Notifier — Slots", color=color)
     embed.add_field(name="🟢 Disponibles", value=f"`{remaining}/5`", inline=True)
     embed.add_field(name="🔴 Occupés", value=f"`{len(active)}/5`", inline=True)
     if active:
@@ -265,24 +270,26 @@ async def slots_cmd(interaction: discord.Interaction):
 
 
 # ============================================================
-#  TASK — Vérification des timers toutes les minutes
+#  TASK — Timer
 # ============================================================
 @tasks.loop(minutes=1)
 async def check_slots():
     data = load_data()
     now = datetime.utcnow()
     updated = False
+    guild = get_main_guild()
+    if not guild:
+        return
 
     for slot in data["slots"][:]:
         expires = datetime.fromisoformat(slot["expires_at"])
         remaining_seconds = (expires - now).total_seconds()
-        guild = bot.guilds[0] if bot.guilds else None
-        if not guild:
-            continue
 
-        member = guild.get_member(slot["user_id"])
+        try:
+            member = await guild.fetch_member(slot["user_id"])
+        except:
+            member = None
 
-        # Alerte 5 minutes avant expiration
         if not slot.get("alerted") and 0 < remaining_seconds <= 300:
             slot["alerted"] = True
             updated = True
@@ -297,12 +304,10 @@ async def check_slots():
                 except:
                     pass
 
-        # Expiration du slot
         if remaining_seconds <= 0:
             data["slots"].remove(slot)
             updated = True
 
-            # Retirer le rôle
             role = guild.get_role(ROLE_ID)
             if member and role:
                 try:
@@ -310,19 +315,17 @@ async def check_slots():
                 except:
                     pass
 
-            # DM d'expiration
             if member:
                 try:
                     exp_embed = discord.Embed(
                         title="⌛ Slot expiré",
-                        description="Votre slot OKV Notifier a expiré. Merci d'utiliser `/acheter` pour en prendre un nouveau !",
+                        description="Votre slot OKV Notifier a expiré. Utilisez `/acheter` pour en prendre un nouveau !",
                         color=0xFF0000
                     )
                     await member.send(embed=exp_embed)
                 except:
                     pass
 
-            # Annonce publique
             channel = guild.get_channel(ANNOUNCE_CHANNEL_ID)
             if channel:
                 new_remaining = MAX_SLOTS - len(data["slots"])
@@ -353,4 +356,3 @@ async def on_ready():
 
 bot.run(TOKEN)
     
-                
