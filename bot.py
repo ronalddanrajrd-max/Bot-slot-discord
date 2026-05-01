@@ -124,7 +124,7 @@ class ConfirmView(discord.ui.View):
 
     @discord.ui.button(label="✅ Confirmer le paiement", style=discord.ButtonStyle.green)
     async def confirm_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Defer immédiatement pour éviter le timeout Discord
+        # FIX : defer immédiatement pour éviter "Échec de l'interaction"
         await interaction.response.defer(ephemeral=True)
 
         if interaction.user.id != OWNER_ID:
@@ -147,7 +147,7 @@ class ConfirmView(discord.ui.View):
             try:
                 await member.add_roles(role)
             except Exception as e:
-                await interaction.followup.send(f"⚠️ Impossible d'ajouter le rôle : {e}", ephemeral=True)
+                return await interaction.followup.send(f"❌ Impossible d'ajouter le rôle : {e}", ephemeral=True)
 
         data = load_data()
         expires_at = datetime.utcnow() + timedelta(hours=self.hours)
@@ -171,7 +171,7 @@ class ConfirmView(discord.ui.View):
             dm_embed.add_field(name="⌛ Expire à", value=f"<t:{int(expires_at.timestamp())}:F>", inline=True)
             await member.send(embed=dm_embed)
         except Exception:
-            pass  # L'utilisateur a peut-être les DMs fermés
+            pass
 
         channel = guild.get_channel(ANNOUNCE_CHANNEL_ID)
         remaining = slots_remaining()
@@ -190,12 +190,15 @@ class ConfirmView(discord.ui.View):
                 )
             await channel.send(embed=announce_embed)
 
-        await interaction.followup.send(f"✅ Slot confirmé pour {member.mention} ({self.hours}h) !", ephemeral=True)
+        await interaction.followup.send(
+            f"✅ Slot confirmé pour {member.mention} ({self.hours}h) !",
+            ephemeral=True
+        )
         self.stop()
 
     @discord.ui.button(label="❌ Refuser", style=discord.ButtonStyle.red)
     async def deny_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Defer immédiatement pour éviter le timeout Discord
+        # FIX : defer immédiatement pour éviter "Échec de l'interaction"
         await interaction.response.defer(ephemeral=True)
 
         if interaction.user.id != OWNER_ID:
@@ -286,7 +289,7 @@ async def slots_cmd(interaction: discord.Interaction):
     heures="Durée en heures"
 )
 async def whitelist(interaction: discord.Interaction, membre: discord.Member, heures: int):
-    # Defer immédiatement
+    # FIX : defer immédiatement pour éviter "L'application ne répond plus"
     await interaction.response.defer(ephemeral=True)
 
     if interaction.user.id != OWNER_ID:
@@ -442,5 +445,5 @@ async def on_ready():
 
 
 bot.run(TOKEN)
-            
+        
     
