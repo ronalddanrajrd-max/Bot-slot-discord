@@ -7,9 +7,9 @@ import os
 from datetime import datetime, timedelta
 
 # ============================================================
-#  CONFIG — Remplacez les placeholders par vos vraies valeurs
+#  CONFIG
 # ============================================================
-TOKEN = os.environ.get("MTQ5OTU4MDUzODIwODUyMjQ0MQ.GqQm1Y.XrDKlOWVsK6noLlWD_AnOmya8uE6hrLzgD13rg")
+TOKEN = os.environ.get("MTQ5OTU4MDUzODIwODUyMjQ0MQ.GfTIP8.5T6r2dR1Vt1QdApjgfpS37X7Ma42U9H3E7SUtg")
 OWNER_ID = 1467602579482480821
 ANNOUNCE_CHANNEL_ID = 1485113159726666020
 ROLE_ID = 1485439657284993248
@@ -125,16 +125,13 @@ class ConfirmView(discord.ui.View):
         if not member:
             return await interaction.response.send_message("❌ Utilisateur introuvable.", ephemeral=True)
 
-        # Vérifier les slots
         if slots_remaining() <= 0:
             return await interaction.response.send_message("❌ Plus de slots disponibles !", ephemeral=True)
 
-        # Attribuer le rôle
         role = guild.get_role(ROLE_ID)
         if role:
             await member.add_roles(role)
 
-        # Enregistrer le slot
         data = load_data()
         expires_at = datetime.utcnow() + timedelta(hours=self.hours)
         slot = {
@@ -147,7 +144,6 @@ class ConfirmView(discord.ui.View):
         data["slots"].append(slot)
         save_data(data)
 
-        # Envoyer le script en DM
         try:
             dm_embed = discord.Embed(
                 title="🎉 Accès OKV Notifier activé !",
@@ -160,7 +156,6 @@ class ConfirmView(discord.ui.View):
         except:
             pass
 
-        # Annonce publique
         channel = guild.get_channel(ANNOUNCE_CHANNEL_ID)
         remaining = slots_remaining()
         if channel:
@@ -302,7 +297,6 @@ async def check_slots():
             data["slots"].remove(slot)
             updated = True
 
-            # Retirer le rôle
             role = guild.get_role(ROLE_ID)
             if member and role:
                 try:
@@ -310,19 +304,17 @@ async def check_slots():
                 except:
                     pass
 
-            # DM d'expiration
             if member:
                 try:
                     exp_embed = discord.Embed(
                         title="⌛ Slot expiré",
-                        description="Votre slot OKV Notifier a expiré. Merci d'utiliser `/acheter` pour en prendre un nouveau !",
+                        description="Votre slot OKV Notifier a expiré. Utilisez `/acheter` pour en prendre un nouveau !",
                         color=0xFF0000
                     )
                     await member.send(embed=exp_embed)
                 except:
                     pass
 
-            # Annonce publique
             channel = guild.get_channel(ANNOUNCE_CHANNEL_ID)
             if channel:
                 new_remaining = MAX_SLOTS - len(data["slots"])
@@ -352,3 +344,4 @@ async def on_ready():
 
 
 bot.run(TOKEN)
+                
