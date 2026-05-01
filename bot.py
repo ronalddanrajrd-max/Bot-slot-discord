@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 # ============================================================
 #  CONFIG — Remplacez les placeholders par vos vraies valeurs
 # ============================================================
-TOKEN = "MTQ5OTU4MDUzODIwODUyMjQ0MQ.GqQm1Y.XrDKlOWVsK6noLlWD_AnOmya8uE6hrLzgD13rg"
+TOKEN = os.environ.get("MTQ5OTU4MDUzODIwODUyMjQ0MQ.GqQm1Y.XrDKlOWVsK6noLlWD_AnOmya8uE6hrLzgD13rg")
 OWNER_ID = 1467602579482480821
 ANNOUNCE_CHANNEL_ID = 1485113159726666020
 ROLE_ID = 1485439657284993248
